@@ -1,0 +1,1220 @@
+---
+title: "Analysis of Methods: IBM Attrition Dataset"
+author: "Alexandria Strosahl"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# H2o & Stepwise Fisher's Selection Method in a Log Odds Ratio Model to Predict Employee Attrition
+
+
+In Random Forest and Support Vector Machines analysis we found 86% success in accurately identifying variables that could reliably predict attrition. 
+
+This Analysis examines distributions of our data set at the vector level, interaction level, and group level as well as analyses of variable importance, feature selection, method selection, and model implementation to determine what model fits our data set the best with the purpose of uncovering what variables have the strongest relationship with attrition and what factors individually and combinationally predict attrition and what their success rates are.
+
+
+###### *Load Necessary Libraries for Analysis*
+
+```{r Libraries}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(pacman))
+suppressPackageStartupMessages(library(corrplot))
+suppressPackageStartupMessages(library(do))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(rstatix))
+suppressPackageStartupMessages(library(car))
+suppressPackageStartupMessages(library(broom))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(funModeling))
+suppressPackageStartupMessages(library(cluster))
+suppressPackageStartupMessages(library(cvms))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(tibble))
+suppressPackageStartupMessages(library(DescTools))
+suppressPackageStartupMessages(library(ResourceSelection))
+suppressPackageStartupMessages(library(modelr))
+suppressPackageStartupMessages(library(corrplot))
+suppressPackageStartupMessages(library(biotools))
+suppressPackageStartupMessages(library(klaR))
+suppressPackageStartupMessages(library(MASS))
+suppressPackageStartupMessages(library(psych))
+suppressPackageStartupMessages(library(scatterplot3d))
+suppressPackageStartupMessages(library(factoextra))
+suppressPackageStartupMessages(library(matlib))
+suppressPackageStartupMessages(library(GGally))
+suppressPackageStartupMessages(library(Hmisc))
+suppressPackageStartupMessages(library(heplots))
+suppressPackageStartupMessages(library(gplots))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(rpart))
+suppressPackageStartupMessages(library(tree))
+suppressPackageStartupMessages(library(rpart.plot))
+suppressPackageStartupMessages(library(randomForest))
+suppressPackageStartupMessages(library(ggthemes))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(scales))
+suppressPackageStartupMessages(library(fBasics) )
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(plotly))
+suppressPackageStartupMessages(library(skimr))
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(e1071))
+suppressPackageStartupMessages(library(xgboost))
+suppressPackageStartupMessages(library(h2o))
+suppressPackageStartupMessages(library(ggcorrplot))
+suppressPackageStartupMessages(library(corrgram))
+suppressPackageStartupMessages(library(lightgbm))
+suppressPackageStartupMessages(library(treemap))
+suppressPackageStartupMessages(library(treemapify))
+suppressPackageStartupMessages(library(repr))
+suppressPackageStartupMessages(library(cowplot))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(plotrix))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(forcats))
+suppressPackageStartupMessages(library(reshape2))
+suppressPackageStartupMessages(library(caTools))
+suppressPackageStartupMessages(library(rattle))
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(zoo))
+suppressPackageStartupMessages(library(rlang))
+suppressPackageStartupMessages(library(partykit))
+suppressPackageStartupMessages(library(lmtest))
+suppressPackageStartupMessages(library(locfit))
+suppressPackageStartupMessages(library(logitnorm))
+suppressPackageStartupMessages(library(lognorm))
+suppressPackageStartupMessages(library(logspline))
+suppressPackageStartupMessages(library(lsr))
+suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(MKmisc))
+suppressPackageStartupMessages(library(memisc))
+suppressPackageStartupMessages(library(pROC))
+suppressPackageStartupMessages(library(glmtoolbox))
+suppressPackageStartupMessages(library(stargazer))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(knitr))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(leaflet))
+suppressPackageStartupMessages(library(rgdal))
+suppressPackageStartupMessages(library(plm))
+suppressPackageStartupMessages(library(gt))
+suppressPackageStartupMessages(library(flextable))
+suppressPackageStartupMessages(library(gtsummary))
+suppressPackageStartupMessages(library(table1))
+suppressPackageStartupMessages(library(foreign))
+suppressPackageStartupMessages(library(tseries))
+suppressPackageStartupMessages(library(dynlm))
+suppressPackageStartupMessages(library(vars))
+suppressPackageStartupMessages(library(nlWaldTest))
+suppressPackageStartupMessages(library(sandwich))
+suppressPackageStartupMessages(library(forecast))
+suppressPackageStartupMessages(library(systemfit))
+suppressPackageStartupMessages(library(AER))
+suppressPackageStartupMessages(library(xtable))
+suppressPackageStartupMessages(library(texreg))
+suppressPackageStartupMessages(library(gcookbook))
+suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(webshot))
+suppressPackageStartupMessages(library(webshot2))
+suppressPackageStartupMessages(library(pandoc))
+suppressPackageStartupMessages(library(tinytex))
+
+```
+
+
+Load The Cleaned Attrition Data Set
+###### _containing one satisfaction variable_
+```{r Loading, message=FALSE, warning=FALSE}
+# Read data set into R
+ibm <- read.csv("C:/Users/stros/Documents/Attrition_Cleaned_Combined.csv",header = TRUE)
+
+# Creation of variable names assigned to original data set for safe keeping and analysis to prevent multiple loadings of the data set. 
+
+# Assign a variable name to the original data set
+OG_at <- ibm
+
+# Assign a secondary variable name to the original data set
+df <- ibm
+
+# Assign a tertiary variable name to the original data set
+vt <- ibm 
+
+# Assign a quartary variable name to the original data set
+at <- ibm
+
+```
+
+
+## Data Exploration
+
+```{r Data Exploration, message=FALSE, warning=FALSE, paged.print=TRUE}
+# View entire data set
+view(at)
+
+# Display data types of variables
+at %>% glimpse()
+
+# Display specificities of variables
+str(at)
+
+# Display data frame with associated indices and column names
+data.frame(colnames(at))
+
+```
+
+# Why Do Employee's Quit?
+
+```{r att props, message=FALSE, warning=FALSE, paged.print=TRUE}
+attr_p <- at %>% group_by(Attrition) %>% summarise(Count=n()) %>% 
+  mutate(pct=round(prop.table(Count),2) * 100) %>% 
+  ggplot(aes(x=Attrition, y=pct)) + geom_bar(stat="identity", fill=c("lightgrey",'#0b5bab'), color="#ffffff") + coord_flip() + 
+  geom_text(aes(x=Attrition, y=0.01, label= sprintf("%.0f%%", pct)),
+            hjust=-0.1, vjust=.5, size=6, 
+            colour="#414041", fontface="bold") + theme_bw() + labs(x="", y="") + 
+  labs(title="Proportion of Employee Attrition") + theme(plot.title=element_text(hjust=0.5),  plot.background = element_blank(),
+                                                         panel.grid.major = element_blank(),panel.grid.minor = element_blank(), 
+                                                         panel.border = element_blank())
+
+atr_num <- at %>% group_by(Attrition) %>% summarise(Count=n()) %>%
+  ggplot(aes(x=Attrition, y=Count)) + geom_bar(stat="identity", fill=c("lightgrey",'#0b5bab'), color="#ffffff") + 
+  geom_text(aes(x=Attrition, y=0.01, label= Count),
+            hjust=0.5, vjust=-1, size=6, 
+            colour="#414041", fontface="bold",
+            angle=360) + theme_bw() + labs(title="Employee Attrition", x="",y="Amount") + 
+  theme(plot.title=element_text(hjust=0.5), 
+        plot.background = element_blank(), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), panel.border = element_blank())
+```
+
+```{r plot the gird, message=FALSE, warning=FALSE}
+plot_grid(atr_num, attr_p, align="h", ncol=2)
+```
+
+### Correlation
+
+Next we are going to examine if any correlation amongst the nominal variables exist to determine what variables should remain in the model. 
+
+```{r Correllation, message=FALSE, warning=FALSE}
+# Correlation plot of numeric variables
+# Set the plotting parameters
+options(repr.plot.width=10, repr.plot.height=7) 
+
+# Transform the attrition variable to binary 0 or 1 to incorporate into the corr plot to determine strength of relationships with nominal variables.
+vt$Attrition[vt$Attrition=="Yes"]=1
+vt$Attrition[vt$Attrition=="No"]=0
+vt$Attrition=as.numeric(vt$Attrition)
+
+# Create variable name for only selecting numeric variables to place in corr plot
+num <- select_if(vt, is.numeric)
+
+# Create variable name for rounding the decimals
+corr <- round(cor(num), 1)
+
+# Display the plot
+ggcorrplot(corr, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="square", 
+           colors = c("#bbac39", "white", "#3948bb"), 
+           title="Correlogram of Employee Attrition", 
+           ggtheme=theme_minimal())
+
+```
+
+## Variable Selection
+
+Turning characters into factor levels & integer to ordinal
+```{r factorizing, message=FALSE, warning=FALSE}
+# Change characters types into factors to perform analysis:
+# Business Travel, Department, EducationField, Gender, JobRole, MaritalStatus, OverTime
+# Their column numbers are: 3,5,8,10,14,15,19
+OG_at[,c(3,5,8,10,14,15,19)]=lapply(OG_at[,c(3,5,8,10,14,15,19)],as.factor)
+
+# Changing the datatype from integer to factors from the ordinal variables.
+cols <- c("Education", "JobInvolvement", "JobLevel", "Overall_Satisfaction", "PerformanceRating", 
+          "StockOptionLevel", "TrainingTimesLastYear","PercentSalaryHike")
+
+# Transform selected columns placed into the cols variable into factor levels for analysis 
+OG_at[cols] <- lapply(OG_at[cols], factor)
+
+# Remove unnecessary and redundant columns by assigning to variable name
+colr <- c("HourlyRate","EmployeeNumber","MonthlyRate","DailyRate")
+
+# Delete columns
+OG_at[colr] <- NULL
+```
+
+
+Splitting the Data into Training & Testing
+```{r Splitting, message=FALSE, warning=FALSE}
+# Splitting the data into training and testing
+set.seed(123)
+
+# Splitting our data
+TI <- createDataPartition(OG_at$Attrition, p=0.7, 
+                          list=FALSE, times=1)
+
+# Variable name for training 
+train <- OG_at[TI,]
+
+# Variable name for testing
+test <- OG_at[-TI,]
+
+# Checking that both the training and testing sets have the same proportions of attrition factor levels
+# training attrition proportion
+ptrain <- train %>% select(Attrition) %>% group_by(Attrition) %>% summarise(n=n()) %>%
+  mutate(pct=round(prop.table(n), 2))
+
+# testing attrtion proportion
+ptest <- test %>% select(Attrition) %>% group_by(Attrition) %>% summarise(n=n()) %>%
+  mutate(pct=round(prop.table(n), 2))
+
+# Display proportions for training and testing
+ptrain
+ptest
+
+```
+
+### Classification Trees
+```{r rpart tree, message=FALSE, warning=FALSE}
+# Create rpart from training data
+rpt <- rpart(Attrition ~ ., data=train)
+
+# Assign branch and margin parameters
+plot(rpt, uniform=TRUE, branch=0.6, margin=0.05)
+
+# Text to use in plot
+text(rpt, all=TRUE, use.n=TRUE)
+title("Attrition Training Data Classification Tree") 
+
+```
+
+### Feature Importance Graph
+```{r Feat Imp Gr, message=FALSE, warning=FALSE}
+# From rpart tree above, create data frame for variable importance selection
+var.imp <- data.frame(rpt$variable.importance)
+
+# Make features from rpart into row names of variables
+var.imp$features <- rownames(var.imp)
+var.imp <- var.imp[, c(2, 1)]
+var.imp$importance <- round(var.imp$rpt.variable.importance, 2)
+var.imp$rpt.variable.importance <- NULL
+
+# Make sure the length of features are unique to the variable
+CC <- length(unique(var.imp$features))
+
+# Build the graph
+feat.imp <- var.imp %>%
+  ggplot(aes(x=reorder(features, importance), y=importance, fill=features)) + geom_bar(stat='identity') + coord_flip() + 
+  theme_minimal() + theme(legend.position="none", strip.background = element_blank(), strip.text.x = element_blank(), 
+                          plot.title=element_text(hjust=0.5, color="#909090"), plot.subtitle=element_text(color=""), plot.background=element_rect(fill='white'),
+                          axis.text.x=element_text(colour="#909090"), axis.text.y=element_text(colour="#909090"),
+                          axis.title=element_text(colour="#909090"), 
+                          legend.background = element_rect(fill="white",
+                                                           size=0.5, linetype="solid", 
+                                                           colour ="white")) + scale_fill_manual(values = colorRampPalette(brewer.pal(24, "Set2"))(CC)) + 
+  geom_label(aes(label=paste0(importance, "%")), colour = "white", fontface = "bold", hjust=0.6) + 
+  labs(title="Feature Importance", x="Features", y="Importance Value")
+
+# Display graph
+feat.imp 
+```
+
+Tune the tree down to the most important variables
+```{r Tune Tree, message=FALSE, warning=FALSE}
+# Set the plot width and height
+options(repr.plot.width=10, repr.plot.height=10) 
+
+# Set pruning option
+tune.rpt <- prune(rpt, cp=0.02)
+
+# Set branch options
+plot(tune.rpt, uniform=TRUE, branch=0.3, margin=.01)
+
+# Set text options
+text(tune.rpt, all=TRUE, use.n=TRUE)
+
+# Assign variable name to the newly tuned tree
+partytree <- as.party(rpt)
+
+# Display tree
+partytree
+```
+
+
+## h2o
+As seen in the feature importance analysis, we will remove education, performance rating, and years since last promotion variables due to their low feature value. 
+
+```{r message=FALSE, warning=FALSE}
+# Display column names and index numbers to remove unnecessary variables for H2o to analyze which model is best
+data.frame(colnames(at))
+
+# Change characters types into factors to perform analysis:
+# Attrition, Business Travel, Department, EducationField, Gender, JobRole, 
+# MaritalStatus, OverTime
+# Their column numbers are: 2,3,5,8,10,14,15,17,19
+at[,c(2,3,5,8,10,14,15,17,19)]=lapply(at[,c(2,3,5,8,10,14,15,17,19)],as.factor)
+
+# Changing the datatype from integer to factors from the ordinal variables.
+cols <- c("JobInvolvement", "JobLevel", "PercentSalaryHike", 
+          "StockOptionLevel", "TrainingTimesLastYear", "Overall_Satisfaction")
+
+# Factorize the columns
+at[cols] <- lapply(at[cols], factor)	
+
+# Remove columns that are redundant and unimportant as outlined in the feature selection analysis
+delete <- c("DailyRate", "EmployeeNumber","HourlyRate", "MonthlyRate","PerformanceRating","Education","YearsSinceLastPromotion")
+
+# Delete
+at[delete] <- NULL
+
+```
+
+Initialize h2o
+```{r H2o init, message=FALSE, warning=FALSE}
+# Initialize H2o based on personal computer parameters 
+# -- This way it won't eat up all my memory --
+h2o.init(max_mem_size = "9G")
+```
+
+H2O AutoML, automatic machine learning in R was developed to bridge the gap between demand and ability of people entering the field of data science, which provides a simple wrapper function that performs a multitude of modeling-related tasks. H2o is applied in the analysis to automate the machine learning workflow to uncover the best model for analyzing attrition, where the automatic training and tuning of different models in training, testing, and validation sets is applied. 
+
+In this portion of the analysis AutoML is applied to groups of factor variables, model objects, and individual models to explain a model that best fits our data.  
+
+
+Putting the data set into h2o
+```{r message=FALSE, warning=FALSE}
+# Put altered data frame based on feature importance analysis into H2o
+h2o_df <- as.h2o(at)
+
+```
+
+Splitting data for h2o
+```{r message=FALSE, warning=FALSE}
+#Randomize
+set.seed(123)
+
+# Split data set into training, validation, and testing 
+split.at <- h2o.splitFrame(h2o_df, c(0.7, 0.15), seed=12)
+
+# Assign variable names to the three sets and values
+# Training set
+HTrn <- h2o.assign(split.at[[1]], "train")
+
+# Validation set
+Hval <- h2o.assign(split.at[[2]], "validation")
+
+# Testing set
+Htest <- h2o.assign(split.at[[2]], "test")
+
+```
+
+Describe what H2o options are available based on our model
+```{r message=FALSE, warning=FALSE}
+#Display h2o options
+h2o.describe(HTrn)
+
+```
+
+Calling the AutoML function and printing the best models for our data set
+```{r h2o dimensions, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Assign x an y values for h2o
+# Dependent variable
+y <- "Attrition"
+
+# All independent variables
+x <- setdiff(names(HTrn), y)
+
+# leader board function calling the models to find the most appropriate and best functioning for our attrition data set.
+auto_ml <- h2o.automl(
+  y = y,
+  x = x,
+  training_frame = HTrn,
+  leaderboard_frame = Hval,
+  project_name = "Attrition",
+  max_models = 10,
+  seed = 12
+)
+
+# Variable name for best model
+top_models <- auto_ml@leaderboard
+
+#Display models
+print(top_models)
+```
+
+#### Best Fitting Models & Most Important Features
+
+```{r H2o mods, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Find best models and associated ID's to determine which type of analysis best fits our data
+# variable name for model names
+model_id <- as.data.frame(top_models$model_id)[,1]
+
+# Get best family of models
+best_family <- h2o.getModel(grep("StackedEnsemble_BestOfFamily", model_id, value=TRUE)[1])
+
+# Variable name for displaying results 
+obtain_model <- h2o.getModel(best_family@model$metalearner$name)
+
+# Display results of best method and model to use for analysis
+h2o.varimp(obtain_model)
+
+# Plot results of best method and model to use for analysis
+h2o.varimp_plot(obtain_model)
+
+# Find and display most important variables
+tm <- h2o.get_best_model(auto_ml)
+h2o.varimp(tm)
+h2o.varimp_plot(tm)
+
+```
+
+Our analysis of determining the best fitting models and feature importance utilizing h2o indicates that a General Linear model is the most effective in making predictions about the longevity of an employee and Job Role is one of the more influential variables in making these predictions. 
+
+Based off of this information, we will implement a General Linear Model to make predictions about employee attrition. The function of GLM is not to determine a general line and instead use it as a binary response variable in a non-normal binomial distribution to compute the probability of employee longevity based off of variable selection using Stepwise Fisher's selection method. 
+
+\newpage
+
+## Stepwise Fisher's Variable Selection Method
+#### _Building a Logit Model_
+
+In order to analyze associations and patterns present between explanatory variables and attrition, we need to transform the "yes" and "no" characters into 0's and 1's and factorize them before building a model. This allows the GLM algorithm to compute the probability of observing whether an employee stays or leaves based off of 0 and 1 values. Furthermore, we must factorize dimensions and and ordinal variables to determine if associations are present that influence attrition. 
+
+Here we are implementing a Logit link function because our response variable, attrition, is dictohomous containing either a 0 or 1 with a primary interest of probability as log(μ/(1 − μ)) = α + βx.
+
+For this next portion, we will split our data into training and testing sets and build models from a split ratio of 70% and 30% then validate goodness of fit based off of statistical testing, ROC curves, probability tables, and reintegration of testing data into training data to determine if a GLM model is best and what variables are the most significant. 
+
+
+#### Variable Transformation
+
+```{r Var trans, message=FALSE, warning=FALSE}
+# Reload the dataset for accuracy in column identifaction, transformation, and removal
+ibm <- read.csv("C:/Users/stros/Documents/Attrition_Cleaned_Combined.csv",header = TRUE)
+
+# Rename the data set with a variable name
+df <- ibm
+
+#To perform analysis we must change the data type of the categorical dependent variable Attrition from  
+#assign value 1 to “Yes” and value 0 to “No”, convert it into numeric, then factorize.
+df$Attrition[df$Attrition=="Yes"]=1
+df$Attrition[df$Attrition=="No"]=0
+df$Attrition <- as.numeric(df$Attrition)
+df$Attrition <- as.factor(df$Attrition)
+
+#To perform analysis we must change the data type of the categorical variable Over Time from  
+#assign value 1 to “Yes” and value 0 to “No”, convert it into numeric, then factorize.
+df$OverTime[df$OverTime=="Yes"]=1
+df$OverTime[df$OverTime=="No"]=0
+df$OverTime <- as.numeric(df$OverTime)
+df$OverTime <- as.factor(df$OverTime)
+
+#To perform analysis we must change the data type of the categorical variable Over Time from  
+#assign value 1 to “Yes” and value 0 to “No”, convert it into numeric, then factorize.
+df$Gender[df$Gender=="Male"]=1
+df$Gender[df$Gender=="Female"]=0
+df$Gender <- as.numeric(df$Gender)
+df$Gender <- as.factor(df$Gender)
+
+# Confirm Attrition variable is changed to binary
+str(df$Attrition)
+
+# Confirm Over Time variable is changed to binary
+str(df$OverTime)
+
+# Confirm Gender variable is changed to binary
+str(df$Gender)
+
+# Change characters types into factors to perform analysis:
+# Business Travel, Department, EducationField, JobRole, and MaritalStatus
+# Their column numbers are: 3,5,8,10,14,15
+df[,c(3,5,8,14,15)]=lapply(df[,c(3,5,8,14,15)],as.factor)
+
+# Assign variable name to ordinal variables
+cols <- c("JobInvolvement", "JobLevel", "PercentSalaryHike", 
+          "StockOptionLevel")
+
+# Factorize the ordinal variables
+df[cols] <- lapply(df[cols], factor)	
+
+# Remove redundant and insignificant variables
+delete <- c("DailyRate", "EmployeeNumber","HourlyRate", "MonthlyRate","PerformanceRating","Education","YearsSinceLastPromotion")
+
+# Delete
+df[delete] <- NULL
+
+```
+
+#### Training and Testing Data for Model Validation
+
+```{r Step GLM train test, message=FALSE, warning=FALSE}
+# Randomize for selection 
+set.seed(1000)
+
+# Variable name for partitioning data
+TT <- sample(x=c("Training","Testing"),size=nrow(df),replace=T,prob=c(0.7,0.3))
+
+# Training data set
+train_df=df[TT=="Training",]
+
+# Testing data set
+test_df=df[TT=="Testing",]
+
+#confirm that the split is 70/30
+nrow(train_df)
+nrow(test_df)
+```
+
+Model names for analysis
+```{r model names, message=FALSE, warning=FALSE}
+# Assign all independent variables to a variable name 
+xAll <- colnames(df[,c(1,3:22)])
+
+# Display the explanatory/column names
+xAll
+
+# Combine all explanatory variables together
+modAll <- paste(xAll,collapse="+")
+
+# Confirm that it worked
+modAll
+
+#Attach the dependent variable to explanatory variable column names
+modAll1 <- paste("Attrition~",modAll)
+
+# Confirm it worked
+modAll1
+
+# Convert to a formula
+equation <- as.formula(modAll1)
+
+# Confirm it worked
+equation 
+
+```
+
+Our model in the analysis using training data is: 
+
+Attrition = Age + Business Travel + Department + Distance From Home + Education Field + Gender + Job Involvement + Job Level + Job Role + Marital Status + Monthly Income + Number of Companies Worked + Over Time + Percent Salary Hike + Stock Option Level + Total Working Years + Training Times Last Year + Years At Company + Years In Current Role + Years With Current Manager + Overall Satisfaction
+
+#### Training Model
+
+```{r message=FALSE, warning=FALSE, paged.print=TRUE}
+# variable for training glm model
+train_df1 <- glm(formula = equation,data=train_df,family="binomial")
+
+# variable for stepwise glm
+train_df1 <- stepAIC(train_df1, trace = TRUE, direction = "both")
+
+# Display summary results
+coeftest(train_df1,type="text")
+
+# Display coefficient results
+stargazer(train_df1,type = "text")
+
+#view anova results
+print(train_df1$anova)
+```
+Summary output from Stepwise Fisher's variable selection method indicates the best fitting model to be: 
+
+Attrition ~ Age + BusinessTravel + DistanceFromHome + EducationField + 
+    Gender + JobInvolvement + JobLevel + JobRole + MonthlyIncome + 
+    NumCompaniesWorked + OverTime + StockOptionLevel + TotalWorkingYears + 
+    TrainingTimesLastYear + YearsAtCompany + YearsInCurrentRole + 
+    YearsWithCurrManager + Overall_Satisfaction
+
+Where:
+
+Attrition = 5.71 - 0.024(Age) + 2.544(BusinessTravelTravel_Frequently) + 1.201(BusinessTravelTravel_Rarely) + 0.04786(DistanceFromHome) - 1.03(EducationFieldLife Sciences) + 0.044(EducationFieldMarketing) - 1.18(EducationFieldMedical) - 1.11(EducationFieldOther) - 0.07(EducationFieldTechnical Degree) + 0.46(GenderMale) - 1.98(JobInvolvement2) - 1.96(JobInvolvement3) - 2.93(JobInvolvement4) - 1.21(JobLevel2) + 1.56(JobLevel3) + 0.78(JobLevel4) + 1.73(JobLevel5) + 0.2(JobRoleHuman Resources) + 0.56(JobRoleLaboratory Technician) + 1.29(JobRoleManager) + 0.65(JobRoleManufacturing Director) - 15.82(JobRoleResearch Director) - 0.28(JobRoleResearch Scientist) + 1.23(JobRoleSales Executive) + 0.5491(JobRoleSales Representative) - 0.0002834(MonthlyIncome) + 0.24(NumCompaniesWorked) + 1.99(OverTimeYes) - 1.51(StockOptionLevel1) - 1.67(StockOptionLevel2) - 0.92(StockOptionLevel3) - 0.1144(TotalWorkingYears) - 0.2349(TrainingTimesLastYear) + 0.2241(YearsAtCompany) - 0.21(YearsInCurrentRole) - 0.12(YearsWithCurrManager) - 0.39(Overall_Satisfaction)
+
+According to the output from Stepwise Fisher's and Anova summary, the most significant variables in predicting attrition are Business Travel, Distance From Home, Job Involvement, Monthly Income, Number of Companies Worked, Overtime, Stock Option Level, Total Working Years, Training Times Last Year, Years at Company, and Overall Satisfaction with all p-values less than .05. 
+
+To supplement our variable selection in model validation we use the Akaike Information Criterion (AIC) for the selection of the most significant variables to our model. The variables mentioned above are chosen from the lowest AIC in the Stepwise Fisher's selection method with an AIC of 604.1. The AIC is estimates the in-sample prediction error functioning similar to an adjusted R-square effectively penalizing a model that uses too many variables.
+
+This indicates that if an organization gives attention to these variables and makes effort in controlling for them, they are at a lesser chance of loosing an employee. 
+
+To confirm if this model is truly a good fit for our data, we will implement statistical testing methods to verify if this is the case and if true, move forward with our building of a model. 
+
+#### Hosmer-Lemeshow goodness of fit test & ROC Curve
+
+H0: The specified model is correct vs. H1: The model is not a good fit
+If p-values are greater than .05 we accept H0 and reject H1. 
+```{r HL Test on Train, message=FALSE, warning=FALSE}
+# HL test on training data
+HLgof.test(fit=train_df1$fitted.values,obs=train_df1$y)
+```
+
+The Hosmer-Lemeshow goodness of fit test calculated by dividing the data set according to their predicted probabilities based on their estimated parameter values, as seen in the equation above. The probability that attrition = 1 is calculated for each observation in the sample based on each observation’s covariates.
+
+It's important to note that large p-values do not strictly indicate good fit of a model because lack of evidence against a poor fit is not sufficient for declaring good fit in favor of the alternative hypothesis. if our sample size is small, a high p-value from the test may simply be a consequence of the test having lower power to detect misspecification of a model, rather than being indicative of good fit. However, with 1,025 observations in the sample and a p-value of .45 it is indicated that the model as specified above is a good fit. Therefore, we will continue to evaluating fit.
+
+
+#### Plotting the ROC Curve 
+
+Another way to determine goodness of fit is the measurement of Receiver Operating Characteristics, also known as the ROC
+```{r ROC Plot, message=FALSE, warning=FALSE}
+# Now we plot on the ROC curve to determine accuracy of fit
+tdfcROC <- roc(response=train_df1$y,predictor = train_df1$fitted.values,plot=T)
+
+# Display results
+tdfcROC$auc
+```
+
+The ROC measures are sensitivity, 1-Specificity, False Positive, and False Negative and sensitivity measures the goodness of accuracy & specificity measures the weakness of the model. 
+
+The plot of accuracy and specificity measures is displayed on the concave plot indicating that as sensitivity is increasing 1-specificity is increasing but at a diminishing rate. The C-value Area Under the Curve, known as the AUC, or the value of the concordance index calculates the measure of the area under the ROC curve. According to these statistical measures testing goodness of fit if C-value is .5 or less, it would indicate that the model cannot accurately discriminate between 0 and 1 in the dependent variable. This suggests that the model cannot appropriately predict which employees stay and which employees leave based on given parameters.   
+
+The c-value AUC is much greater than 50%, at 90% indicating that our model can accurately discriminate between 0 and 1 concluding that our model is sufficient for making predictions for employee attrition based on the model parameters. 
+
+Next we will create classification
+
+With the evidence of significant variables in our model, Hosmer-Lemeshow goodness of fit test H statistic p-value of .45, and 90% area under the curve, we will continue with testing our model by creating classification tables for our training data.
+
+#### Classification Table
+
+```{r Classification Tables, message=FALSE, warning=FALSE}
+# Create contingency table
+trncpred <- ifelse(test=train_df1$fitted.values>0.5,yes = 1,no=0)
+
+# Display accuracy in the table
+table(train_df1$y,trncpred)
+
+# Display results of table placed into a variable 
+x <- (sum(train_df1$y == trncpred)/nrow(train_df))*100
+
+# Print accuracy prediction rate
+x<- round(x,0)
+x <- paste("
+           Attrition Prediction Accuracy:",x,"%")
+cat(x)
+
+```
+
+The above code specifies that if the predicted value of the probability is greater than 0.5 then the value of the status is 1 else it is 0 where we compare (1-1) and (0-0) matched pairs. This indicates that in our binomial probability distribution of either 0 or 1 there is a 50% probability of selecting a yes or a no regarding employee attrition. Our output indicates that our model accurately predicting employee attrition based on the given parameters accurately 90% of the time. 
+
+
+With evidence of significant variables in our model using the lowest AIC value, Hosmer-Lemeshow goodness of fit test H statistic p-value of .45, 90% area under the curve, and prediction accuracy of 90% we will continue with testing our model by incorporating testing data to validate our model. 
+
+#### Test Training Model with Testing Data
+
+Here we will confirm accuracy of our model by incorporating testing data into our model and repeating statistical testing as performed above.
+```{r test into train, message=FALSE, warning=FALSE}
+# Compare training model by incorporating testing data to confirm accuracy
+t.t.pred <- predict.glm(object=train_df1,newdata=test_df,type = "response")
+
+```
+
+
+#### Generate the ROC Curve with Training Data
+
+```{r ROC test into train, message=FALSE, warning=FALSE}
+# ROC curve with test data in the training model
+t.t.roc=roc(response=test_df$Attrition,predictor = t.t.pred,plot=T)
+
+# Display results
+t.t.roc$auc
+```
+
+With our specified probability rate reflective of the binomial distribution of 50%, the output indicates that our model accurately predicting employee attrition based on the given parameters accurately 82% of the time with the incorporated training data. 
+
+
+#### Classification Table of Training Data
+
+```{r Classi Tab w Test Dat in trn mod, message=FALSE, warning=FALSE}
+# Create and display classification table of testing data in training model
+t.t.pred <- ifelse(test=t.t.pred>0.5,yes=1,no=0)
+
+# Display table
+table(test_df$Attrition,t.t.pred)
+
+# Print accuracy prediction rate of test data in training model
+xx <- (sum(test_df$Attrition == t.t.pred)/nrow(test_df))*100
+xx <- round(xx,0)
+xx <- paste("
+            Attrition Prediction Accuracy:", xx,"%")
+cat(xx)
+
+```
+
+With evidence of significant variables in our model using the lowest AIC value, Hosmer-Lemeshow goodness of fit test H statistic p-value of .45, 90% area under the curve, prediction classification accuracy of 90% on the training data, and c-value of 82% much greater than 50% of testing data and 86% classification accuracy of testing data we will proceed with further trial of model accuracy. 
+
+After evidence suggesting that our model is valid, useful, and accurate, we will utilize all observations in the data set to create a model to test the validity of the logit model through the same process as outlined above to determine if it withstands rigorous testing procedures to determine if over fitting is present or if there is misspecification of the model.
+
+\newpage
+
+#### Stepwise Fisher's Variable Selection Method
+
+We will build a model and examine the significance of variables using all of the observations in our data set. Here we define model names and parameters contained within for analysis.
+
+_Model names for analysis of the first model_
+```{r first step model full data, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Assign a variable name to glm model with entire data set
+moddf <- glm(formula = equation,data=df,family="binomial")
+
+# Assign variable for stepwise variable selection in glm
+moddf <- stepAIC(moddf, trace = TRUE, direction = "both")
+
+#display results of coefficients
+stargazer(moddf, type="text")
+
+# Display summary results of coefficients
+coeftest(moddf,type="text")
+
+# Display results
+print(summary(moddf))
+
+# Display Anova results
+print(moddf$anova)
+```
+
+Summary output from Stepwise Fisher's variable selection method utilizing every observation from the data set to predict attrition indicates the best fitting model with the lowest AIC value to be: 
+
+Attrition ~ Age + BusinessTravel + DistanceFromHome + EducationField + 
+    Gender + JobInvolvement + JobLevel + JobRole + NumCompaniesWorked + 
+    OverTime + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + 
+    YearsAtCompany + YearsInCurrentRole + YearsWithCurrManager + 
+    Overall_Satisfaction
+    
+Where
+
+Attrition = 3.89 - 0.03(Age) + 2.02(BusinessTravelTravel_Frequently) + 0.98(BusinessTravelTravel_Rarely) + 0.05(DistanceFromHome) - 0.78(EducationFieldLife Sciences) - 0.34(EducationFieldMarketing) - 0.9(EducationFieldMedical) - 0.86(EducationFieldOther) + 0.23(EducationFieldTechnical Degree) + 0.33(GenderMale) - 1.15(JobInvolvement2) - 1.46(JobInvolvement3) - 2.16(JobInvolvement4) - 1.75(JobLevel2) - 0.48(JobLevel3) - 1.63(JobLevel4) + 0.36(JobLevel5) + 0.2(JobRoleHuman Resources) + 0.61(JobRoleLaboratory Technician) - 0.84354(JobRoleManager) + 0.20163(JobRoleManufacturing Director) - 2.05926(JobRoleResearch Director) - 0.45(JobRoleResearch Scientist) + 1.21(JobRoleSales Executive) + 0.98(JobRoleSales Representative) + 0.21(NumCompaniesWorked) + 2.00(OverTimeYes) - 1.49(StockOptionLevel1) - 1.33(StockOptionLevel2) - 0.96(StockOptionLevel3) - 0.06(TotalWorkingYears) - 0.19(TrainingTimesLastYear) + 0.15(YearsAtCompany) - 0.14(YearsInCurrentRole) - 0.12(YearsWithCurrManager) - 0.35(Overall_Satisfaction)
+    
+Stepwise Fisher's variable selection and Anova summary output suggest the most significant variables in predicting attrition are Age, Business Travel, Distance From Home, Gender, Job Involvement, Job Level 2 and 4, Job Role Research Director factor level, Job Role Sales Executive factor level, Number of Companies Worked, Overtime, Stock Option Level, Total Working Years, Training Times Last Year, Years at Company, Years In Current Role, Years With Current Manager, and Overall Satisfaction with all p-values less than .05. 
+
+
+The AIC estimates the in-sample prediction error of the first model implemented using the entire data set to determine variable selection of the best fitting model to predict attrition from the variables mentioned above begining from 917.62 to the selection of the model with the lowest AIC in the Stepwise Fisher's selection method with an AIC of 902.42. In this way we are attempting to reduce over fitting and missspecification for being penalized in using too many variables or defining parameters in appropriately. 
+
+This indicates that if an organization gives attention to these variables and makes effort in controlling for them, they are at a lesser chance of loosing an employee. 
+
+To confirm if this model is truly a good fit for our data, we will implement statistical testing methods to verify the validity of our model and compare it's accuracy to other reduced models.
+
+
+#### Hosmer-Lemeshow goodness of fit test & ROC Curve
+
+H0: The specified model is correct vs. H1: The model is not a good fit
+If p-values are greater than .05 we accept H0 and reject H1. 
+
+```{r}
+# HL test on entire data set model and display results
+HLgof.test(fit=moddf$fitted.values,obs=moddf$y)
+
+```
+
+The Hosmer-Lemeshow goodness of fit test that is calculated by dividing the data set according to their predicted probabilities based on their estimated parameter values, as seen in the equation above where the probability that attrition = 1 is calculated for each observation in the sample based on each observation’s covariates.
+
+It's important to note that large p-values do not strictly indicate good fit of a model because lack of evidence against a poor fit is not sufficient for declaring good fit in favor of the alternative hypothesis. With a lower H-Statistic compared to training data but 1,470 observations, our p-value greater than .06 indicates that our specified model is a good fit. Therefore, we will continue evaluating fit.
+
+#### Plotting the ROC Curve 
+
+Another way to determine goodness of fit is the measurement of Receiver Operating Characteristics, also known as the ROC
+
+```{r}
+# Display accuracy in ROC curve
+curve <- roc(response=moddf$y,predictor = moddf$fitted.values,plot=T)
+
+# ROC results
+curve$auc
+
+```
+
+The ROC measures are sensitivity, 1-Specificity, False Positive, and False Negative and sensitivity measures the goodness of accuracy & specificity measures the weakness of the model. 
+
+The plot of accuracy and specificity measures is displayed on the concave plot indicating that as sensitivity is increasing 1-specificity is increasing but at a diminishing rate. The C-value Area Under the Curve, known as the AUC, or the value of the concordance index calculates the measure of the area under the ROC curve. According to these statistical measures testing goodness of fit if C-value is .5 or less, it would indicate that the model cannot accurately discriminate between 0 and 1 in the dependent variable. This suggests that the model cannot appropriately predict which employees stay and which employees leave based on given parameters.   
+
+The c-value AUC is much greater than 50%, at 88% indicating that our model can accurately discriminate between 0 and 1 concluding that our model is sufficient for making predictions for employee attrition based on the model parameters. 
+
+With the evidence of significant variables in our model, Hosmer-Lemeshow goodness of fit test H statistic p-value of .45, and 88% area under the curve, we will continue with testing our model by creating classification tables for our training data.
+
+### Classification Table
+
+```{r}
+# Create contingency table
+mdfp <- ifelse(test=moddf$fitted.values>0.5,yes = 1,no=0)
+
+# Display accuracy in the table
+table(moddf$y,mdfp)
+
+# Display results of table placed into a variable 
+xxx <- (sum(moddf$y == mdfp)/nrow(df))*100
+
+# Print accuracy prediction rate
+xxx <- round(xxx,0)
+xxx <- paste("
+             Attrition Prediction Accuracy:",xxx,"%")
+
+cat(xxx)
+
+```
+
+The above code specifies that if the predicted value of the probability is greater than 0.5 then the value of the status is 1 else it is 0 where we compare (1-1) and (0-0) matched pairs. This indicates that in our binomial probability distribution of either 0 or 1 there is a 50% probability of selecting a yes or a no regarding employee attrition. Our output indicates that our model accurately predicting employee attrition based on the given parameters accurately 90% of the time. 
+
+After evidence suggesting that our model is valid, useful, and accurate, we will utilize the observations made in this portion of our analysis to create a model with fewer parameters based on the output in the Stepwise Fisher's variable selection method.
+
+
+\newpage
+
+### Stepwise Fisher's Variable Selection Method
+
+We will build a model and examine the significance of variables using all of the observations in our data set based on the parameters specified below from the lowest AIC value in the first Stepwise Fisher's Selection method:
+
+Where
+
+Attrition ~ Age + BusinessTravel + DistanceFromHome + EducationField + 
+    Gender + JobInvolvement + JobLevel + JobRole + NumCompaniesWorked + 
+    OverTime + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + 
+    YearsAtCompany + YearsInCurrentRole + YearsWithCurrManager + 
+    Overall_Satisfaction
+
+```{r}
+# Create new variable name with specified columns
+mn <- colnames(df[,c(1,3,5:10,13:14,16:22)])
+
+# Create the model
+fmn <- paste(mn,collapse="+")
+
+# Confirm it worked
+fmn
+
+# Create model name
+form <- paste("Attrition~",fmn)
+
+# Confirm it worked
+form
+
+# Convert into equation
+m.form <- as.formula(form)
+
+```
+
+
+#### Run the GLM model 
+
+```{r step glm 2, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Assign a variable name to reduced glm model with entire data set
+mod <- glm(formula = m.form,data=df,family="binomial")
+
+# Assign variable for stepwise variable selection in glm
+mod <- stepAIC(mod, trace = TRUE, direction = "both")
+
+# Display results of coefficients
+stargazer(mod, type="text")
+
+# Display summary results of coefficients
+coeftest(mod,type="text")
+
+# Display Anova results
+print(mod$anova)
+
+```
+
+Summary output from Stepwise Fisher's variable selection method utilizing every observation from the data set to predict attrition indicates the best fitting model with the lowest AIC value to be: 
+
+Final Model:
+Attrition ~ Age + BusinessTravel + DistanceFromHome + EducationField + 
+    Gender + JobInvolvement + JobLevel + JobRole + NumCompaniesWorked + 
+    OverTime + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + 
+    YearsAtCompany + YearsInCurrentRole + YearsWithCurrManager + 
+    Overall_Satisfaction
+
+Where 
+
+Attrition = 3.89 - 0.03(Age)+ 2.02(BusinessTravelTravel_Frequently)+ 1(BusinessTravelTravel_Rarely)	+ 0.05(DistanceFromHome) - 0.8(EducationFieldLife Sciences) - 0.34(EducationFieldMarketing)	- 0.891928(EducationFieldMedical) - 0.87(EducationFieldOther) + 0.23(EducationFieldTechnical Degree) + 0.33(GenderMale) - 1.15(JobInvolvement2) - 1.46(JobInvolvement3) - 2.17(JobInvolvement4)	-1.75483(JobLevel2)	-0.478625(JobLevel3) - 1.63(JobLevel4) + 0.36(JobLevel5) + 0.2(JobRoleHuman Resources) + 0.61(JobRoleLaboratory Technician)	- 0.84(JobRoleManager) + 0.2(JobRoleManufacturing Director) - 2.06(JobRoleResearch Director) - 0.45(JobRoleResearch Scientist) + 1.21(JobRoleSales Executive) + 0.98(JobRoleSales Representative) + 0.21(NumCompaniesWorked) + 2(OverTimeYes) - 1.49(StockOptionLevel1) - 1.33(StockOptionLevel2) - 0.96(StockOptionLevel3) - 0.06(TotalWorkingYears) - 0.19(TrainingTimesLastYear)	+ 0.15(YearsAtCompany) - 0.14(YearsInCurrentRole) - 0.12(YearsWithCurrManager) - 0.35(Overall_Satisfaction)
+
+Based off of the output from Stepwise Fisher's and summary output, the most significant variables in predicting attrition are Age, Business Travel, Distance From Home, Job Involvement, Job Role Research Director factor level, Job Role Executive factor level, Number of Companies Worked, Overtime, Stock Option Level, Total Working Years, Training Times Last Year, Years at Company, Years In Current Role, Years With Current Manager, and Overall Satisfaction with all p-values less than .05. 
+
+To supplement our variable selection in model validation we use the Akaike Information Criterion (AIC) for the selection of the most significant variables to our model. The variables mentioned above are chosen from the lowest AIC in the Stepwise Fisher's selection method with an AIC of 902.42. The AIC is estimates the in-sample prediction error functioning similar to an adjusted R-square effectively penalizing a model that uses too many variables.
+
+This indicates that if an organization gives attention to these variables and makes effort in controlling for them, they are at a lesser chance of loosing an employee. 
+
+To confirm if this model is truly a good fit for our data, we will implement statistical testing methods to verify the validity of our model and compare it's accuracy to other reduced models.
+
+
+#### Hosmer-Lemeshow goodness of fit test & ROC Curve
+
+H0: The specified model is correct vs. H1: The model is not a good fit
+If p-values are greater than .05 we accept H0 and reject H1. 
+```{r hl mod2, message=FALSE, warning=FALSE}
+# HL test on entire data set model and display results
+HLgof.test(fit=mod$fitted.values,obs=mod$y)
+```
+
+The Hosmer-Lemeshow goodness of fit test calculated by dividing the data set according to their predicted probabilities based on their estimated parameter values, as seen in the equation above. The probability that attrition = 1 is calculated for each observation in the sample based on each observation’s covariates.
+
+It's important to note that large p-values do not strictly indicate good fit of a model because lack of evidence against a poor fit is not sufficient for declaring good fit in favor of the alternative hypothesis. With a lower H-Statistic compared to training data but 1,470 observations, our p-value greater than .06 same as our previous model indicates that our specified model is a good fit. Therefore, we will continue evaluating fit on this model then implementing an even more restricted model to compare.
+
+
+#### Plotting the ROC Curve 
+
+Another way to determine goodness of fit is the measurement of Receiver Operating Characteristics, also known as the ROC
+
+```{r mod2 roc, message=FALSE, warning=FALSE}
+# Now we plot on the ROC curve to determine accuracy of fit
+mROC <- roc(response=mod$y,predictor = mod$fitted.values,plot=T)
+
+# Display results
+mROC$auc
+```
+
+The ROC measures are sensitivity, 1-Specificity, False Positive, and False Negative and sensitivity measures the goodness of accuracy & specificity measures the weakness of the model. 
+
+The plot of accuracy and specificity measures is displayed on the concave plot indicating that as sensitivity is increasing 1-specificity is increasing but at a diminishing rate. The C-value Area Under the Curve, known as the AUC, or the value of the concordance index calculates the measure of the area under the ROC curve. According to these statistical measures testing goodness of fit if C-value is .5 or less, it would indicate that the model cannot accurately discriminate between 0 and 1 in the dependent variable. This suggests that the model cannot appropriately predict which employees stay and which employees leave based on given parameters.   
+
+The c-value AUC is much greater than 50%, at 87% indicating that our model can accurately discriminate between 0 and 1 concluding that our model is sufficient for making predictions for employee attrition based on the model parameters. 
+
+Next we will create classification
+
+With the evidence of significant variables in our model, Hosmer-Lemeshow goodness of fit test H statistic p-value of .45, and 87% area under the curve, we will continue with testing our model by creating classification tables for our training data.
+
+### Classification Table
+
+```{r}
+# Create contingency table
+cm2 <- ifelse(test=mod$fitted.values>0.5,yes = 1,no=0)
+
+# Display accuracy in the table
+table(mod$y,cm2)
+
+# Display results of table placed into a variable 
+xxxx <- (sum(mod$y == cm2)/nrow(df))*100
+
+# Print accuracy prediction rate
+xxxx <- round(xxxx,0)
+xxxx <- paste("
+              Attrition Prediction Accuracy:",xxxx,"%")
+cat(xxxx)
+
+```
+
+With identical AIC scores, Hosmer-Lemeshow goodness of fit test & ROC Curves, and classification table accuracy rates, we will reduce the model based on p-values and determine which is the best fit for our final analysis of specifying a general linear model that best fits the data then finalize conclusions with mean accuracy validation scores of all three models and define the one with highest accuracy.
+
+\newpage
+
+### Final Model for Testing
+Model names for analysis
+```{r mod3 names, message=FALSE, warning=FALSE}
+# Assign all independent variables to a variable name 
+m <- colnames(df[,c(1,3,5,7:10,13:14,16:22)])
+
+# Display the explanatory/column names
+m
+
+# Combine all explanatory variables together
+n <- paste(m,collapse="+")
+
+# Confirm that it worked
+n
+
+#Attach the dependent variable to explanatory variable column names
+f <- paste("Attrition~",n)
+
+# Confirm that it worked
+f
+
+# Convert to a formula
+e <- as.formula(f)
+
+# Confirm that it worked
+e
+
+```
+
+Our model for this analysis is: 
+
+Attrition = Age + Business Travel + Distance From Home + Job Involvement + Job Level + Job Role + Number of Companies Worked + OverTime + Stock Option Level + Total Working Years + Training Times Last Year + Years At Company + Years In Current Role + Years With Current Manager + Overall Satisfaction
+
+
+### Determine the Model
+
+```{r step mod3, message=FALSE, warning=FALSE, paged.print=TRUE}
+# variable for building the glm model
+mod2 <- glm(formula = e,data=df,family="binomial")
+
+# variable for stepwise glm
+mod2 <- stepAIC(mod2, trace = TRUE, direction = "both")
+
+# Display summary results
+coeftest(mod2,type="text")
+
+# Display coefficient results
+stargazer(mod2,type = "text")
+
+#view anova results
+print(mod2$anova)
+
+```
+
+With an increased AIC of 907.02, we will use the model as previously defined and test accuracy of prediction rates based on a for loop in the model. 
+
+\newpage
+
+### Determine Average Accuracy Rates
+
+Here we create a matrix and for loop to run through and calculate the average prediction accuracy of the model with the lowest AIC satisfying assumptions defined as:
+
+Final Model:
+Attrition ~ Age + BusinessTravel + DistanceFromHome + EducationField + 
+    Gender + JobInvolvement + JobLevel + JobRole + NumCompaniesWorked + 
+    OverTime + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + 
+    YearsAtCompany + YearsInCurrentRole + YearsWithCurrManager + 
+    Overall_Satisfaction
+    
+
+```{r final glm mod, message=FALSE, warning=FALSE}
+# Assign a variable name to the reduced GLM model with entire data set without using step
+mod <- glm(formula = m.form,data=df,family="binomial")
+
+```
+
+Create the matrix and for loop
+
+```{r message=FALSE, warning=FALSE}
+#create matrix for validation for loop
+cv <- matrix(1:10, nrow = 1470, ncol = 1)
+
+validation <- matrix(NA, ncol = 10)
+
+# for loop
+for(i in 1:10) {
+  model <- glm(formula = m.form, data = subset(df, cv != i), family="binomial")
+  pred <- predict(model, newdata=subset(df, cv == i), type = "response")
+  pred.fact <- ifelse(test=pred>0.5,yes = 1,no=0)
+  validation[i] <- sum(subset(df, cv == i)[,2]== pred.fact)/nrow(subset(df, cv == i))
+}
+
+# Display results in maxtrix
+stargazer(validation,type = "text")
+
+# Display results in maxtrix
+round(validation,2)
+
+# Display average validation
+M <- mean(validation)*100
+M <- round(M,0)
+M<- paste("
+          Average Attrition Prediction Accuracy:",M,"%")
+
+cat( 
+  M)
+
+```
+
+The prediction accuracy rates above suggest that our model built as:
+
+Attrition = 3.89 - 0.03(Age)+ 2.02(BusinessTravelTravel_Frequently)+ 1(BusinessTravelTravel_Rarely)	+ 0.05(DistanceFromHome) - 0.8(EducationFieldLife Sciences) - 0.34(EducationFieldMarketing)	- 0.891928(EducationFieldMedical) - 0.87(EducationFieldOther) + 0.23(EducationFieldTechnical Degree) + 0.33(GenderMale) - 1.15(JobInvolvement2) - 1.46(JobInvolvement3) - 2.17(JobInvolvement4)	-1.75483(JobLevel2)	-0.478625(JobLevel3) - 1.63(JobLevel4) + 0.36(JobLevel5) + 0.2(JobRoleHuman Resources) + 0.61(JobRoleLaboratory Technician)	- 0.84(JobRoleManager) + 0.2(JobRoleManufacturing Director) - 2.06(JobRoleResearch Director) - 0.45(JobRoleResearch Scientist) + 1.21(JobRoleSales Executive) + 0.98(JobRoleSales Representative) + 0.21(NumCompaniesWorked) + 2(OverTimeYes) - 1.49(StockOptionLevel1) - 1.33(StockOptionLevel2) - 0.96(StockOptionLevel3) - 0.06(TotalWorkingYears) - 0.19(TrainingTimesLastYear)	+ 0.15(YearsAtCompany) - 0.14(YearsInCurrentRole) - 0.12(YearsWithCurrManager) - 0.35(Overall_Satisfaction)
+
+is able to accurately predict attrition 89% of the time. 
+
+\newpage
+
+## Log Odds 
+
+Here we will compare the accuracy of the two models in the prediction probability of employee attrition as specified in the Stepwise Fisher's variable selection method and the subsequent model that it was built. 
+
+```{r compare log likelihoods, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Load the log odds package 
+suppressPackageStartupMessages(library(epiDisplay))
+
+# Log odds of the first model built
+logistic.display(moddf)
+
+# Log odds of the second model built
+logistic.display(mod)
+
+```
+
+
+Stargazer function for evaluating probability ratios
+```{r stargazer2, message=FALSE, warning=FALSE, paged.print=TRUE}
+# odds ratio stargazer funtion
+stargazer2 <- function(model, odd.ratio = F, ...) {
+  if(!("list" %in% class(model))) model <- list(model)
+  
+  if (odd.ratio) {
+    coefOR2 <- lapply(model, function(x) exp(coef(x)))
+    seOR2 <- lapply(model, function(x) exp(coef(x)) * summary(x)$coef[, 2])
+    p2 <- lapply(model, function(x) summary(x)$coefficients[, 4])
+    stargazer(model, coef = coefOR2, se = seOR2, p = p2, ...)
+    
+  } else {
+    stargazer(model, ...)
+  }
+}
+```
+
+
+Final model output
+```{r log odd star gaze, message=FALSE, warning=FALSE, paged.print=TRUE}
+stargazer2(mod,odd.ratio = T,type = "text",title = "Estimated Odds Ratios and Z-Statistics from a Probabilistic Model of Employee Attrition")
+```
+
+
+> # Summary
+
+The Logit function used in our model is the natural log odds that Attrition is 1, meaning that they were retained at a company where parameters are described in terms of probability ratio to predict whether an employee attrits.
+
+The final model built from the output in Stepwise Fisher's variable selection method has identical AIC 
+
+β_0, is the intercept parameter sometimes called the constant term which describes the relationship that Attrition is a function of Age, Business Travel, Distance From Home, Education Field, Gender, Job Involvement, Job Level, Job Role, Number of Companies Worked, Over Time, Stock Option Level, Total Working Years, Training Times Last Year, Years at Company, Years in Current Role, Years with Current Manager, and Overall Satisfaction. The Intercept is the mean value of the response variable when all of the predictor variables in the model are equal to zero. Indicating that when all explanatory variables are zero, the probability that an employee attrits is 4%. 
+
+β_1, the coefficient of Age, is the coefficient of a probabilistic logit model that is the difference in the log odds, that a one unit increase in Age changes the expected probability of employee attrition by 97% per one unit change in age while all other factors are fixed.
+
+β_2, the coefficient of Business Travel at the factor level of Travel Frequently, is the coefficient of a probabilistic logit model indicating that a one unit increase in this variable at this factor level  changes the expected probability of employee Attrition increasing the likelihood that an employee attrits if they are able to travel frequently 3 times more than if they were to travel rarely.  
+
+β_3, the coefficient Business Travel at the factor level of Travel Rarely in our probabilistic logit model increases the expected probability of employee attrition when measuring the effect of this variable at this factor level on attrition holding all other factors fixed. Meaning that a one unit change in this variable at this factor level increases the likelihood of employee attrition twice more than any other factor level of business travel.
+
+β_4, the coefficient of Distance From Home is the coefficient of a probabilistic logit model that  changes the expected probability of employee attrition, while all other factors are fixed if an employee lives within a specified range of their place of work, they are more likely to stay longer at a company.
+
+β_5, β_6, β_7, β_8, β_9, are the coefficients of Education Field on the factor levels of Life Sciences, Marketing, Medical, Other, and Technical Degree. These coefficients in our probabilistic logit model change the expected probability of employee attrition while all other factors are fixed. Specifically, a one unit change in any of these factor levels decreases the expected probability of employee attrition by 50% if they studied life sciences, 81% if studied marketing, 45% if they studied medicine, 44% if their studies were “other” oriented, and reduced the probability of attrition by 91% if they had a technical degree.
+
+β_10, the coefficient of Gender at the factor level male is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed every one unit change in gender. This indicates that if an employee is male, they are two times more likely to be retained at an organization. 
+
+β_11, β_12, β_13, are the coefficients of Job Involvement on the factor levels of 2, 3, and 4. These coefficients in our probabilistic logit model change the expected probability of employee attrition while all other factors are fixed. Specifically, a one-unit change in any of these factor levels decreases the expected probability of employee attrition by 46% if they are involved at a level 2, 33% if they were involved at a level 3, and 20% if they are involved at a level 4. 
+
+β_14, β_15, β_16, β_17, are the coefficients of Job Level on the factor levels of 2, 3, 4, and 5. These coefficients in our probabilistic logit model change the expected probability of employee attrition while all other factors are fixed. Specifically, a one-unit change in any of these factor levels decreases the expected probability of employee attrition by 3% if they are involved at a level 2, 48% if they were involved at a level 3, 14% if they are involved at a level 4, and increased their probability of retention by 22% if they were at the job level 5.
+
+β_18, β_19, β_20, β_21, β_22,  β_23, β_24, β_25, are the coefficients of Job Role on the factor levels of Human Resources, Laboratory Technician, Manager, Manufacturing Director, Research Director, Research Scientist, Sales Executive, and Sales Representative. These coefficients in our probabilistic logit model change the expected probability of employee attrition while all other factors are fixed. Specifically, an employee is 4 times more likely to stay on if they work in human resources or are lab techs,  however, if they are a manager, they are 17 times less likely to attrit, and 10 time more likely to stay on if they work as a director in  manufacturing. If the employee works as a research director they are 35% less likely to attrit twice as likely to leave if they work as a research sciences, 3 times more like to stay on if they work in sales as an executive, and 8 times more likely to stay if they work as a sales representative.
+
+
+β_26, the coefficient of Number of companies worked is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has worked within specified range of years, they are more likely to stay longer at a company.
+
+β_27, the coefficient of overtime is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee works overtime, they are 4 times more likely to stay on than someone who doesn’t work overtime. 
+
+β_28, β_29, β_30, are the coefficients of Stock Option Level on the factor levels of 1, 2, 3. These coefficients in our probabilistic logit model change the expected probability of employee attrition while all other factors are fixed. Specifically, a one-unit change in any of these factor levels decreases the expected probability of employee attrition by .34 times if at stock level 1, .25 times less likely if at stock level 2, and .66 times less likely if at stock level 3.
+
+β_31, the coefficient of Total Working Years is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 93% more likely to attrit.
+
+β_32, the coefficient of Training Times Last Year  is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 93% more likely to attrit.
+
+β_33, the coefficient of Years At Company is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 12% more likely to attrit.
+
+β_34, the coefficient of Years In Current Role is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 87% more likely to attrit.
+
+β_35, the coefficient of Years With Current Manager is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 89% more likely to attrit.
+
+β_36, the coefficient of Overall Satisfaction is the coefficient of a probabilistic logit model that changes the expected probability of employee attrition, while all other factors are fixed if an employee has been working for a specified period of times they are 71% more likely to attrit.
+
+When this model is compared to similar models, the low value of likelihood is identical to the similar logit model indicating that either rmoval of the variables was insignificant for our model suffers from misspecification.
+
+After examining evidence that reports our model to be valid, useful, and accurate, we will utilize the observations made in this portion of our analysis to create to make predictions regarind employee longevity for future analysis.
+
+The Akaike Information Criterion (AIC) values used in variable selection of the most significant variables to our model at 902.42, identical to the other full model used. Therefore, the variables outlined above are reliebale in making predictions of employee attrition given the parameters previously definied.
+
+This indicates that an individuals age, if they travel for business, how far away they live from home, level of job involvement, specific job role, how many companies they've worked over the years, if they have over time, stock option level, how long they've worked in their live, how long they've been at the company, how long they've been in their specific role, how long they've worked with their specific manager and overall satisfaction in life significantly aid in predicting whether an employee attrits or not. 
+
+
+
+
+
+
+
+

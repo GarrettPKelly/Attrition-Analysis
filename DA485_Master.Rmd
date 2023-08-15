@@ -1,0 +1,1219 @@
+---
+title: "DA485 Capstone Group 8"
+output: html_document
+date: "2023-06-15"
+---
+
+
+## Libraries
+```{r Libraries}
+
+#Data
+data = read.csv('/Users/bgema/OneDrive/Desktop/DA485_Attrition Data.csv')
+  
+#Libraries
+suppressPackageStartupMessages(library(pacman))
+
+libraries <- function()                       {
+  pacman::p_load(
+    #Core Libraries
+    ggplot2,tidyr,dplyr,corrplot,vtable, e1071,caTools,stats,funModeling,
+    #Principal Component Analysis & Multiple Correspondence Analysis
+    FactoMinR,factoextra,
+    #Regression
+    olsrr,
+    #Random Forest
+    randomForest,
+    #Classification & Regression Training
+    caret,
+    #Filtering Methods & Attribute Selection Methods
+    FSelector,FSelectorRcpp,FeatureTerminatoR,
+    #LASSO
+    glmnet
+  )}
+
+libraries()
+```
+
+## Data Preparation & Subsets
+```{r Data}
+
+data = read.csv(file.choose())
+```
+```{r Cleaned Data}
+
+#Creates Data
+data.clean = data
+
+#Attrition to Binary
+data.clean$Attrition<-ifelse(data$Attrition=="Yes",1,0)
+
+#Overtime to Binary
+data.clean$OverTime<-ifelse(data$Attrition=="Yes",1,0)
+
+#Removes Pointless Attributes
+data.clean = data.clean %>% select(-c('EmployeeCount','EmployeeNumber','Over18','StandardHours','DailyRate'))
+
+#Feature Creation: Satisfaction
+data.clean = data.clean %>% mutate(Satisfaction = EnvironmentSatisfaction + JobSatisfaction + WorkLifeBalance + RelationshipSatisfaction)
+
+#Removes Feature Attributes
+data.clean = data.clean %>% select(-c('EnvironmentSatisfaction','JobSatisfaction',
+                                      'WorkLifeBalance','RelationshipSatisfaction'))
+```
+```{r Attributes Only}
+data.attributes = data.clean %>% select(-c('BusinessTravel','Department','EducationField','Gender','JobRole',
+                                     'MaritalStatus'))
+```
+
+## Summary Stats
+```{r Summary Stats}
+st(data)
+
+```
+
+## Dimension Summary
+```{r Dimension Table}
+
+table1::label(data$Attrition) <- "Attrition"
+table1::label(data$Department) <- "Department"
+table1::label(data$BusinessTravel) <- "Business Travel"
+table1::label(data$EducationField) <- "Education Field"
+table1::label(data$JobRole) <- "Job Role"
+table1::label(data$Gender) <- "Gender"
+table1::label(data$MaritalStatus) <- "Marital Status"
+
+caption.dimension  <- "Descriptive Statistics of Dimension Variables"
+
+table1::table1(~ Department + BusinessTravel + EducationField + JobRole + Gender + MaritalStatus | Attrition, data = data, caption=caption.dimension)
+```
+
+## Attribute Summary
+```{r Attribute Table}
+table1::label(data$Attrition) <- "Attrition"
+table1::label(data$DistanceFromHome) <- "Distance From Home"
+table1::label(data$HourlyRate) <- "Hourly Rate"
+table1::label(data$NumCompaniesWorked) <- "Number of companies worked"
+table1::label(data$OverTime) <- "Overtime"
+table1::label(data$PercentSalaryHike) <- "Percent Salary Hike"
+table1::label(data$MonthlyIncome) <- "Monthly Income"
+table1::label(data$MonthlyRate) <- "Monthly Rate"
+table1::label(data$PerformanceRating) <- "Performance Rating"
+table1::label(data$StockOptionLevel) <- "Stock Option Level"
+table1::label(data$TotalWorkingYears) <- "Total Working Years"
+table1::label(data$YearsAtCompany) <- "Year At Company"
+table1::label(data$YearsInCurrentRole) <- "Years In CurrentRole"
+table1::label(data$YearsSinceLastPromotion) <- "Years Since Last Promotion"
+table1::label(data$YearsWithCurrManager) <- "Years With Current Manager"
+
+caption.nominal  <- "Descriptive Statistics of Nominal Factor Variables"
+
+table1::table1(~ DistanceFromHome + HourlyRate + NumCompaniesWorked + OverTime + PercentSalaryHike + MonthlyIncome                   + MonthlyRate + PerformanceRating + StockOptionLevel + TotalWorkingYears + YearsAtCompany +                        YearsInCurrentRole + YearsSinceLastPromotion + YearsWithCurrManager | Attrition, data = data,                     caption=caption.nominal)
+
+```
+
+## Correlation Matrix
+```{r Correlation Matrix}
+#Correlation Matrix
+corrplot::corrplot(cor(data.attributes),type='lower')
+```
+```{r Correlation Matrix (Alternative)}
+corr.df = data.clean
+
+# Correlation plot of numeric variables
+# Set the plotting parameters
+options(repr.plot.width=10, repr.plot.height=7) 
+
+# Transform the attrition variable to binary 0 or 1 to incorporate into the corr plot to determine strength of relationships with nominal variables.
+corr.df$Attrition[vt$Attrition=="Yes"]=1
+corr.df$Attrition[vt$Attrition=="No"]=0
+corr.df$Attrition=as.numeric(vt$Attrition)
+
+# Create variable name for only selecting numeric variables to place in corr plot
+num <- select_if(corr.df, is.numeric)
+
+# Create variable name for rounding the decimals
+corr <- round(cor(num), 1)
+
+# Display the plot
+CorrelationMatrix = ggcorrplot::ggcorrplot(corr, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="square", 
+           colors = c("#bbac39", "white", "#3948bb"), 
+           title="Correlogram of Employee Attrition", 
+           ggtheme=theme_minimal())
+
+remove(corr.df)
+remove(num)
+remove(corr)
+CorrelationMatrix
+```
+
+## Proportion Tables
+```{r Proportion Tables}
+attr_p <- data.clean %>% group_by(Attrition) %>% summarise(Count=n()) %>% 
+  mutate(pct=round(prop.table(Count),2) * 100) %>% 
+  ggplot(aes(x=Attrition, y=pct)) + geom_bar(stat="identity", fill=c("lightgrey",'#0b5bab'), color="#ffffff") + coord_flip() + 
+  geom_text(aes(x=Attrition, y=0.01, label= sprintf("%.0f%%", pct)),
+            hjust=-0.1, vjust=.5, size=6, 
+            colour="#414041", fontface="bold") + theme_bw() + labs(x="", y="") + 
+  labs(title="Proportion of Employee Attrition") + theme(plot.title=element_text(hjust=0.5),  plot.background = element_blank(),
+                                                         panel.grid.major = element_blank(),panel.grid.minor = element_blank(), 
+                                                         panel.border = element_blank())
+
+atr_num <- data.clean %>% group_by(Attrition) %>% summarise(Count=n()) %>%
+  ggplot(aes(x=Attrition, y=Count)) + geom_bar(stat="identity", fill=c("lightgrey",'#0b5bab'), color="#ffffff") + 
+  geom_text(aes(x=Attrition, y=0.01, label= Count),
+            hjust=0.5, vjust=-1, size=6, 
+            colour="#414041", fontface="bold",
+            angle=360) + theme_bw() + labs(title="Employee Attrition", x="",y="Amount") + 
+  theme(plot.title=element_text(hjust=0.5), 
+        plot.background = element_blank(), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), panel.border = element_blank())
+
+attr_p
+atr_num
+cowplot::plot_grid(atr_num, attr_p, align="h", ncol=2)
+```
+
+## Histograms
+```{r Histogram: Age }
+
+data %>% 
+  ggplot(aes(x=Age)) +
+  geom_histogram( binwidth=3, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$Age, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Age") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Daily Rate }
+
+data %>% 
+  ggplot(aes(x=DailyRate)) +
+  geom_histogram( binwidth=100, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$DailyRate, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Daily Rate") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Distance From Home }
+
+data %>% 
+  ggplot(aes(x=DistanceFromHome)) +
+  geom_histogram( binwidth=2, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$DistanceFromHome, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Distance From Home") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Education }
+
+data %>% 
+  ggplot(aes(x=Education)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$Education, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Education") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Environment Satisfaction }
+
+data %>% 
+  ggplot(aes(x=EnvironmentSatisfaction)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Environment Satisfaction") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Hourly Rate }
+
+data %>% 
+  ggplot(aes(x=HourlyRate)) +
+  geom_histogram( binwidth=5, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$HourlyRate, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Hourly Rate") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Job Involvement }
+
+data %>% 
+  ggplot(aes(x=JobInvolvement)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$JobInvolvement, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Job Involvement") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Job Level }
+
+data %>% 
+  ggplot(aes(x=JobLevel)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$JobLevel, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Job Level") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Job Satisfaction }
+
+data %>% 
+  ggplot(aes(x=JobSatisfaction)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Job Satisfaction") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Monthly Income }
+
+data %>% 
+  ggplot(aes(x=MonthlyIncome)) +
+  geom_histogram( binwidth=250, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$MonthlyIncome, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Monthly Income") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Monthly Rate }
+
+data %>% 
+  ggplot(aes(x=MonthlyRate)) +
+  geom_histogram( binwidth=250, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$MonthlyRate, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Monthly Rate") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Number of Companies Worked }
+
+data %>% 
+  ggplot(aes(x=NumCompaniesWorked)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$NumCompaniesWorked, na.rm=TRUE),
+             color='red',size=1.5) +
+  xlab('Number of Companies Worked') +
+  ggtitle("Distribution of Number of Companies Worked") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Percent Salary Hike }
+
+data %>% 
+  ggplot(aes(x=PercentSalaryHike)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$PercentSalaryHike, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Percent Salary Hike") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Performance Rating }
+
+data %>% 
+  ggplot(aes(x=PerformanceRating)) +
+  geom_histogram( binwidth=0.5, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Performance Rating") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Relationship Satisfaction }
+
+data %>% 
+  ggplot(aes(x=RelationshipSatisfaction)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Relationship Satisfaction") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Stock Option Level }
+
+data %>% 
+  ggplot(aes(x=StockOptionLevel)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Stock Option Level") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Total Working Years }
+
+data %>% 
+  ggplot(aes(x=TotalWorkingYears)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$TotalWorkingYears, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Total Working Years") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Training Times Last Years }
+
+data %>% 
+  ggplot(aes(x=TrainingTimesLastYear)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Training Times Last Year") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Work Life Balance }
+
+data %>% 
+  ggplot(aes(x=WorkLifeBalance)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Work Life Balance") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Years At Company }
+
+data %>% 
+  ggplot(aes(x=YearsAtCompany)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$YearsAtCompany, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Years At Company") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Years In Current Role }
+
+data %>% 
+  ggplot(aes(x=YearsInCurrentRole)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$YearsInCurrentRole, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Years In Current Role") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Years Since Last Promotion }
+
+data %>% 
+  ggplot(aes(x=YearsSinceLastPromotion)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$YearsSinceLastPromotion, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Years Since Last Promotion") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Years With Current Manager }
+
+data %>% 
+  ggplot(aes(x=YearsWithCurrManager)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  geom_vline(xintercept = mean(data$YearsWithCurrManager, na.rm=TRUE),
+             color='red',size=1.5) +
+  ggtitle("Distribution of Years With Current Manager") +
+  theme(plot.title = element_text(size=15))
+          
+```
+```{r Histogram: Satisfaction }
+
+data.clean %>% 
+  ggplot(aes(x=Satisfaction)) +
+  geom_histogram( binwidth=1, fill="azure4", color='aliceblue', alpha=0.9) +
+  ggtitle("Distribution of Satisfaction") +
+  theme(plot.title = element_text(size=15))
+          
+```
+
+
+## Bar Plots
+```{r Bar Plot: Age}
+
+# Frequency Table
+summarytools::freq(data$Age, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("Age")
+```
+```{r Bar Plot: Attrition}
+#Frequency Table
+summarytools::freq(data$Attrition, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("Attrition")
+```
+```{r Bar Plot: Business Travel}
+
+#Frequency Table
+summarytools::freq(data$BusinessTravel, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("BusinessTravel")
+
+```
+```{r Bar Plot: Daily Rate}
+# Frequency Table
+summarytools::freq(data$DailyRate, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+```
+```{r Bar Plot: Department}
+
+#Frequency Table
+summarytools::freq(data$Department, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("Department")
+```
+```{r Bar Plot: Distance From Home}
+# Frequency Table
+summarytools::freq(data$DistanceFromHome, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("DistanceFromHome")
+```
+```{r Bar Plot: Education}
+#Frequency Table
+summarytools::freq(data$Education, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("Education")
+```
+```{r Bar Plot: Education Field}
+# Frequency Table
+summarytools::freq(data$EducationField, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("EducationField")
+```
+```{r Bar Plot: Environment Satisfaction}
+# Frequency Table
+summarytools::freq(data$EnvironmentSatisfaction, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("EnvironmentSatisfaction")
+```
+```{r Bar Plot: Gender}
+#Frequency Table
+summarytools::freq(data$Gender, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("Gender")
+```
+```{r Bar Plot: Hourly Rate}
+# Frequency Table
+summarytools::freq(data$HourlyRate, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("HourlyRate")
+```
+```{r Bar Plot: Job Involvement}
+#Frequency Table
+summarytools::freq(data$JobInvolvement, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("JobInvolvement")
+
+
+```
+```{r Bar Plot: Job Level}
+#Frequency Table
+summarytools::freq(data$JobLevel, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("JobLevel")
+
+```
+```{r Bar Plot: Job Role}
+#Frequency Table
+summarytools::freq(data$JobRole, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("JobRole")
+```
+```{r Bar Plot: Job Satisfaction}
+# Frequency Table
+summarytools::freq(data$JobSatisfaction, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("JobSatisfaction")
+```
+```{r Bar Plot: Marital Status}
+#Frequency Table
+summarytools::freq(data$MaritalStatus, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("MaritalStatus")
+```
+```{r Bar Plot: Number of Companies Worked}
+#Frequency Table
+summarytools::freq(data$NumCompaniesWorked, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("NumCompaniesWorked")
+```
+```{r Bar Plot: Overtime}
+# Frequency Table
+summarytools::freq(data$OverTime, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("OverTime")
+```
+```{r Bar Plot: Percent Salary Hike}
+# Frequency Table
+summarytools::freq(data$PercentSalaryHike, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("PercentSalaryHike")
+```
+```{r Bar Plot: Performance Rating}
+#Frequency Table
+summarytools::freq(data$PerformanceRating, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("PerformanceRating")
+```
+```{r Bar Plot: Relationship Satisfaction}
+# Frequency Table
+summarytools::freq(data$RelationshipSatisfaction, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("RelationshipSatisfaction")
+```
+```{r Bar Plot: Stock Option Level}
+#Frequency Table
+summarytools::freq(data$StockOptionLevel, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("StockOptionLevel")
+```
+```{r Bar Plot: Toal Working years}
+#Frequency Table
+summarytools::freq(data$TotalWorkingYears, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("TotalWorkingYears")
+```
+```{r Bar Plot: Training Times Last Year}
+#Frequency Table
+summarytools::freq(data$TrainingTimesLastYear, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("TrainingTimesLastYear")
+```
+```{r Bar Plot: Work Life Balance}
+# Frequency Table
+summarytools::freq(data$WorkLifeBalance, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("WorkLifeBalance")
+```
+```{r Bar Plot: Years At Company}
+#Frequency Table
+summarytools::freq(data$YearsAtCompany, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("YearsAtCompany")
+```
+```{r Bar Plot: Years In Current Role}
+#Frequency Table
+summarytools::freq(data$YearsInCurrentRole, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("YearsInCurrentRole")
+```
+```{r Bar Plot: Years Since Last Promotion}
+# Frequency Table
+summarytools::freq(data$YearsSinceLastPromotion, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("YearsSinceLastPromotion")
+```
+```{r Bar Plot: Years With Current Manager}
+#Frequency Table
+summarytools::freq(data$YearsWithCurrManager, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data %>% freq("YearsWithCurrManager")
+```
+```{r Bar Plot: Satisfaction}
+#Frequency Table
+summarytools::freq(data.clean$Satisfaction, order = "freq", justify = "right", 
+                   headings = summarytools::st_options("headings"),
+                   report.nas = FALSE, style ='rmarkdown')
+
+#Bar Plot
+data.clean %>% freq("Satisfaction")
+```
+
+## Relative Frequencies
+```{r Relative Frequency: Age}
+summarytools::ctable(x = as.factor(data$Age),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Business Travel}
+summarytools::ctable(x = as.factor(data$BusinessTravel),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Daily Rate}
+summarytools::ctable(x = as.factor(data$DailyRate),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Department}
+summarytools::ctable(x = as.factor(data$Department),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Distance From Home}
+summarytools::ctable(x = as.factor(data$DistanceFromHome),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Education}
+summarytools::ctable(x = as.factor(data$Education),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: EducationField}
+summarytools::ctable(x = as.factor(data$EducationField),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Environment Satisfaction}
+summarytools::ctable(x = as.factor(data$EnvironmentSatisfaction),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Gender}
+summarytools::ctable(x = as.factor(data$Gender),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: HourlyRate}
+summarytools::ctable(x = as.factor(data$HourlyRate),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Job Involvement}
+summarytools::ctable(x = as.factor(data$JobInvolvement),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Job Level}
+summarytools::ctable(x = as.factor(data$JobLevel),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Job Role}
+summarytools::ctable(x = as.factor(data$JobRole),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Job Satisfaction}
+summarytools::ctable(x = as.factor(data$JobSatisfaction),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Marital Status}
+summarytools::ctable(x = as.factor(data$MaritalStatus),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Monthly Income}
+summarytools::ctable(x = as.factor(data$MonthlyIncome),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Monthly Rate}
+summarytools::ctable(x = as.factor(data$MonthlyRate),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Number of Companies Worked}
+summarytools::ctable(x = as.factor(data$NumCompaniesWorked),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Overtime}
+summarytools::ctable(x = as.factor(data$OverTime),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Percent Salary Hike}
+summarytools::ctable(x = as.factor(data$PercentSalaryHike),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Performance Rating}
+summarytools::ctable(x = as.factor(data$PerformanceRating),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Relationship Satifaction}
+summarytools::ctable(x = as.factor(data$RelationshipSatisfaction),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Stock Option Level}
+summarytools::ctable(x = as.factor(data$StockOptionLevel),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Total Working Years}
+summarytools::ctable(x = as.factor(data$TotalWorkingYears),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Training Times Last Year}
+summarytools::ctable(x = as.factor(data$TrainingTimesLastYear),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Work Life Balance}
+summarytools::ctable(x = as.factor(data$WorkLifeBalance),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Years At Company}
+summarytools::ctable(x = as.factor(data$YearsAtCompany),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Years In Current Role}
+summarytools::ctable(x = as.factor(data$YearsInCurrentRole),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Years Since Last Promotion}
+summarytools::ctable(x = as.factor(data$YearsSinceLastPromotion),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+```{r Relative Frequency: Years With current Manager}
+summarytools::ctable(x = as.factor(data$YearsWithCurrManager),
+       y = data$Attrition,
+       prop = "r"
+  )
+```
+
+## Box & Whisker Plots
+```{r Box & Whisker: Age}
+ggplot2::ggplot(data, ggplot2::aes(y=Age)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: DailyRate}
+ggplot2::ggplot(data, ggplot2::aes(y=DailyRate)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Distance From Home}
+ggplot2::ggplot(data, ggplot2::aes(y=DistanceFromHome)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Education}
+ggplot2::ggplot(data, ggplot2::aes(y=Education)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Environment Satisfaction}
+ggplot2::ggplot(data, ggplot2::aes(y=EnvironmentSatisfaction)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Hourly Rate}
+ggplot2::ggplot(data, ggplot2::aes(y=HourlyRate)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Job Involvement}
+ggplot2::ggplot(data, ggplot2::aes(y=JobInvolvement)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Job Level}
+ggplot2::ggplot(data, ggplot2::aes(y=JobLevel)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Job Satisfaction}
+ggplot2::ggplot(data, ggplot2::aes(y=JobSatisfaction)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Monthly Income}
+ggplot2::ggplot(data, ggplot2::aes(y=MonthlyIncome)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Monthly Rate}
+ggplot2::ggplot(data, ggplot2::aes(y=JobLevel)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Number of Companies Worked}
+ggplot2::ggplot(data, ggplot2::aes(y=NumCompaniesWorked)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Percent Salary Hike}
+ggplot2::ggplot(data, ggplot2::aes(y=PercentSalaryHike)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Performance Rating}
+ggplot2::ggplot(data, ggplot2::aes(y=PerformanceRating)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Relationship Satisfaction}
+ggplot2::ggplot(data, ggplot2::aes(y=RelationshipSatisfaction)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Stock Option Level}
+ggplot2::ggplot(data, ggplot2::aes(y=StockOptionLevel)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Total Working Years}
+ggplot2::ggplot(data, ggplot2::aes(y=TotalWorkingYears)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Training Times Last Year}
+ggplot2::ggplot(data, ggplot2::aes(y=TrainingTimesLastYear)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Work Life Balance}
+ggplot2::ggplot(data, ggplot2::aes(y=WorkLifeBalance)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Years At Company}
+ggplot2::ggplot(data, ggplot2::aes(y=YearsAtCompany)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Years In Current Role}
+ggplot2::ggplot(data, ggplot2::aes(y=YearsInCurrentRole)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Years Since Last Promotion}
+ggplot2::ggplot(data, ggplot2::aes(y=YearsSinceLastPromotion)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Years With Current Manager}
+ggplot2::ggplot(data, ggplot2::aes(y=YearsWithCurrManager)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+```{r Box & Whisker: Satisfaction}
+ggplot2::ggplot(data.clean, ggplot2::aes(y=Satisfaction)) +
+  ggplot2::geom_boxplot(fill='coral1') +
+  ggplot2::stat_boxplot(geom ='errorbar')
+```
+
+## Feature Selection
+```{r MCA}
+
+#MCA Temporary Data
+
+MCA.df <-   data.clean %>% select(c('BusinessTravel','Department','EducationField','JobRole','Gender',
+                                    'MaritalStatus'))
+
+#MCA
+Results.MCA <<- FactoMineR::MCA(MCA.df,graph=F)
+
+#Model Plots
+#Dimension Contributions
+plot(Results.MCA,choix="var")                                                       
+#All Levels
+plot(Results.MCA,invisible="ind")
+#Top 6
+plot(Results.MCA,invisible=c("ind"), selectMod="cos2 6")      
+
+#Scree Plots
+fviz_screeplot(Results.MCA, addlabels = TRUE, ylim = c(0, 45),
+               main='All Observations')
+
+#Variable Contribution Summaries
+Results.MCA$var$cos2
+
+#Eigenvalues
+Results.MCA$eig
+
+#Factor Level Contributions, Scree
+fviz_cos2(Results.MCA, choice = "var", axes = 1:2)
+
+#Factor Level Contributions, Scatterplots
+fviz_mca_var(Results.MCA, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal())
+remove(MCA.df)
+```
+```{r Random Forest}
+
+#Creates Data
+RF.df = data
+
+#Removes Pointless Attributes
+RF.df = RF.df %>% select(-c('EmployeeCount','EmployeeNumber','Over18','StandardHours','DailyRate'))
+
+#Feature Creation: Satisfaction
+RF.df = RF.df %>% mutate(Satisfaction = EnvironmentSatisfaction + JobSatisfaction + WorkLifeBalance + RelationshipSatisfaction)
+
+#Removes Feature Attributes
+RF.df = RF.df %>% select(-c('EnvironmentSatisfaction','JobSatisfaction',
+                                      'WorkLifeBalance','RelationshipSatisfaction'))
+
+#Model
+Results.RandomForest = randomForest::randomForest(as.factor(Attrition) ~., data = RF.df)
+
+#Results
+randomForest::importance(Results.RandomForest)
+caret::varImp(Results.RandomForest)
+randomForest::varImpPlot(Results.RandomForest)
+
+remove(RF.df)
+```
+```{r Recursive Feature Selection}
+#Data Prep
+Recursive.df = data
+
+#Removes Pointless Attributes
+Recursive.df = Recursive.df %>% select(-c('EmployeeCount','EmployeeNumber','Over18','StandardHours','DailyRate'))
+
+#Attrition to Binary
+Recursive.df$Attrition<-ifelse(data$Attrition=="Yes",1,0)
+
+#Feature Creation: Satisfaction
+Recursive.df = Recursive.df %>% mutate(Satisfaction = EnvironmentSatisfaction + JobInvolvement + JobSatisfaction + WorkLifeBalance + RelationshipSatisfaction)
+
+#Removes Feature Attributes
+Recursive.df = Recursive.df %>% select(-c('EnvironmentSatisfaction','JobInvolvement','JobSatisfaction',
+                                      'WorkLifeBalance','RelationshipSatisfaction'))
+
+#Recursive Feature Elimination
+Results.Recursive = rfeTerminator(Recursive.df,
+       x_cols=c('Age','DistanceFromHome','Education','JobLevel','MonthlyIncome',
+                'MonthlyRate','NumCompaniesWorked','OverTime','PercentSalaryHike',
+                'PerformanceRating','StockOptionLevel','TotalWorkingYears',
+                'TrainingTimesLastYear','YearsAtCompany','YearsInCurrentRole',
+                'YearsWithCurrManager','Satisfaction'),y_cols="Attrition")
+Results.Recursive$rfe_model_fit_results
+Results.Recursive$rfe_model_fit_results$variables
+remove(Recursive.df)
+```
+```{r Lasso}
+#LASSO
+Lasso.y = data.clean$Attrition
+Lasso.x = data.clean
+Lasso.x = Lasso.x %>% select(-c('Attrition','BusinessTravel','Department','EducationField','Gender',
+                    'JobRole','MaritalStatus')) %>% data.matrix(Lasso.x)
+
+#LASSO: optimal lambda 
+Lasso.lamda = cv.glmnet(Lasso.x,Lasso.y, alpha = 1)
+Lasso.bestlamda = Lasso.lamda$lambda.min
+Lasso.bestlamda
+plot(Lasso.lamda)
+
+#Lasso Model
+Results.Lasso = glmnet(Lasso.x,Lasso.y,alpha=1,lamda=Lasso.bestlamda)
+
+Lasso.y.predicted <- predict(Results.Lasso, s = Lasso.bestlamda, newx = Lasso.x)
+
+Lasso.sst <- sum((Lasso.y - mean(Lasso.y))^2)
+Lasso.sse <- sum((Lasso.y.predicted - Lasso.y)^2)
+Lasso.rsq <- 1 - Lasso.sse/Lasso.sst
+Lasso.rsq
+
+remove(Lasso.x)
+remove(Lasso.y.predicted)
+remove(Lasso.sse)
+remove(Lasso.sst)
+remove(Lasso.y)
+remove(Lasso.all)
+```
+```{r Factor Analysis}
+
+
+FA.df = data.clean
+FA.df = FA.df %>% select(-c('Attrition','BusinessTravel','Department','EducationField','Gender',
+                    'JobRole','MaritalStatus'))
+
+#Factor Analysis
+FactorAnalysis.2.all = factanal(FA.df, factors = 2)
+FactorAnalysis.2.all
+
+remove(FA.df)
+```
+
+##Model: SVM
+```{r SVM Attrition}
+
+#SVM Data
+set.seed(2)
+SVM.df = data.clean
+SVM.df = SVM.df %>% select(-c(
+  PerformanceRating,Department,BusinessTravel,Education,MaritalStatus,EducationField, 
+  YearsInCurrentRole,TrainingTimesLastYear,YearsSinceLastPromotion,NumCompaniesWorked,PercentSalaryHike,
+  MonthlyRate,HourlyRate,DistanceFromHome,StockOptionLevel,TotalWorkingYears,YearsAtCompany,YearsWithCurrManager,
+  JobRole
+  ))
+
+#Attrition to Factor
+SVM.df$Attrition <- ifelse(SVM.df$Attrition==1,'Yes','No')
+SVM.df$Attrition = as.factor(SVM.df$Attrition)
+
+#Overtime to Factor
+SVM.df$OverTime <- ifelse(SVM.df$OverTime==1,'Yes','No')
+#SVM.df$OverTime = as.factor(SVM.df$OverTime)
+
+#cross-Validation
+cv.df <- matrix(sample(1:10, 1470, replace = TRUE), ncol = 1)
+validation <- matrix(NA, ncol = 10)
+
+#SVM Model
+for(i in 1:10) {
+  Model.SVM <- e1071::svm(Attrition~., data = subset(SVM.df, cv.df != i), type = 'C-classification',
+               kernel = 'polynomial', cost = 0.6, gamma = 0.1, epsilon = 0)
+  SVM.predict <-  predict(Model.SVM, newdata = subset(SVM.df, cv.df == i))
+  validation[i] <- sum(subset(SVM.df, cv.df == i)[,2] == SVM.predict)/nrow(subset(SVM.df, cv.df == i))
+  print(table(subset(SVM.df, cv.df == i)[,2],SVM.predict))
+}
+
+SVM.Validation <- validation
+SVM.Validation
+mean(SVM.Validation)
+```
+
+##Model: Random Forest
+```{r Random Forest}
+#Random Forest Data
+require(caret)
+set.seed(1)
+RF.df = data.clean
+RF.df = RF.df %>% select(-c(
+  PerformanceRating,Department,BusinessTravel,Education,MaritalStatus,EducationField, 
+  YearsInCurrentRole,TrainingTimesLastYear,YearsSinceLastPromotion,NumCompaniesWorked,     PercentSalaryHike,MonthlyRate,HourlyRate,DistanceFromHome,StockOptionLevel,
+  TotalWorkingYears,YearsAtCompany,YearsWithCurrManager,JobRole,OverTime))
+
+#Attrition to Factor
+RF.df$Attrition <- ifelse(RF.df$Attrition==1,'Yes','No')
+RF.df$Attrition = as.factor(RF.df$Attrition)
+
+#cross-Validation
+cv.df <- matrix(sample(1:10, 1470, replace = TRUE), ncol = 1)
+validation <- matrix(NA, ncol = 10)
+
+#RF Model
+for(i in 1:10) {
+  Model.RandomForest <- randomForest::randomForest(Attrition~., data = subset(RF.df, cv.df != i))
+  RF.predict <-  predict(Model.RandomForest, newdata = subset(RF.df, cv.df == i))
+  validation[i] <- sum(subset(RF.df, cv.df == i)[,2] == RF.predict)/nrow(subset(RF.df, cv.df == i))
+  print(table(subset(RF.df, cv.df == i)[,2],RF.predict))
+}
+RandomForest.Validation <- validation
+RandomForest.Validation
+mean(RandomForest.Validation)
+```
+
